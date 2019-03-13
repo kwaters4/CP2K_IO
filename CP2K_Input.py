@@ -3,14 +3,14 @@ import CP2KGeometry as cp2kio
 
 class CP2K_Input_Deck:
 
-	def __init__(self, structure, directory, name = "default", method = "QS"):
+	def __init__(self, structure, directory, name = "default", method = "QS", functional = "pbe", potential = "pair_potential"):
 
 		self.name = name
 		self.directory = directory
 		self.structure = structure
 		self.Global = Global(name)
 		self.Motion = Motion(self.Global.run_type)
-		self.Force_Eval = Force_Eval(method)
+		self.Force_Eval = Force_Eval(method, functional, potential)
 
 	def write_file(self):
 		filename = "{}.inp".format(self.name)
@@ -21,11 +21,7 @@ class CP2K_Input_Deck:
 		self.Motion.write_to_file(input_deck)
 		# FORCE_EVAL
 		self.Force_Eval.write_to_file(input_deck)
-
-	
 		input_deck.close()
-		# GLOBAL
-		# COORDINATES
 #		cp2kio.cp2k_structure(structure, filename)
 		return
 
@@ -187,9 +183,9 @@ class Force_Eval:
 
 	stress_tensor = "Analytical" # ANALYTICAL, DIAGONAL_ANALYTICAL, DIAGONAL NUMERICAL, NONE, NUMERICAL 
 
-	def __init__(self, method):
-		self.method = method
-		self.Dft = Dft(method)
+	def __init__(self, method, functional, potential):
+#		self.method = method
+		self.Dft = Dft(method, functional, potential)
 #		self.Sub_Sys = Sub_Sys()
 
 	def write_to_file(self, input_deck):
@@ -215,12 +211,13 @@ class Dft:
 	uks = ".False."
 	wfn_restart_file_name = ""
 
-	def __init__(self, method):
+	def __init__(self, method, functional, potential):
 		self.method = method
 		self.Scf = Scf()
 		if method == "QS":
 			self.Qs = Qs() 
 		self.Mgrid = Mgrid()
+		self.Xc = Xc(functional, potential)
 
 	def asdict(self):
 		return {"BASIS_SET_FILE_NAME" : self.basis_set_file_name, 
@@ -385,6 +382,10 @@ class Xc:
 	density_cutoff = 1E-10
 	gradient_cutoff = 1E-10
 	tau_cutoff = 1E-10
+
+	def __init__(self, functional, potential):
+		self.Vdw_Potential = Vdw_Potential(potential)
+		self.Functional = Functional(functional)
 	
 	def print_options(self):
 		print("--------------------------------------------")
@@ -406,3 +407,34 @@ class Xc:
 #	functional = "PBE"
 #
 #class Pbe:
+
+class Functional:
+
+	def __init__(self, functional):
+		func = "PBE"
+
+class Vdw_Potential:
+
+	def __init__(self, potential):
+		if potential == "pair_potential":
+			self.Pair_Poetential = Pair_Potential()
+		if potential == "none":
+			return
+
+	def print_options(self):
+		print("--------------------------------------------")
+		print("Vdw_Potential Class")
+		print("--------------------------------------------")
+		print("Potential Type          : {}".format(self.potential_type))
+		print("--------------------------------------------")
+	
+	def write_to_file(self, input_deck):
+		input_deck.write("\t\t\t &VDW_POTENTIAL\n")
+		for key, value in self.asdict().items():
+			input_deck.write("\t\t\t\t{} {}\n".format(key,str(value).upper()))
+		input_deck.write("\t\t\t &END VDW_POTENTIAL \n")
+	
+class Pair_Potential:
+	
+	test = 1
+
