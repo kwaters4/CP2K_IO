@@ -3,14 +3,14 @@ import CP2KGeometry as cp2kio
 
 class CP2K_Input_Deck:
 
-	def __init__(self, structure, directory, name = "default", method = "QS", functional = "pbe", potential = "pair_potential"):
+	def __init__(self, structure, directory, name = "default", method = "QS", functional = "pbe", basis_set = "gth_basis_sets", potential = "potential", vdw_potential = "pair_potential"):
 
 		self.name = name
 		self.directory = directory
 		self.structure = structure
 		self.Global = Global(name)
 		self.Motion = Motion(self.Global.run_type)
-		self.Force_Eval = Force_Eval(method, functional, potential)
+		self.Force_Eval = Force_Eval(structure, method, functional, basis_set, potential, vdw_potential)
 
 	def write_file(self):
 		filename = "{}.inp".format(self.name)
@@ -28,8 +28,8 @@ class CP2K_Input_Deck:
 class Global:
 
 	blacs_grid = "SQUARE" #COLUMN, ROW, SQUARE
-	fft_library = "FFTW3"
-	fft_lengths = ".True."
+	preferred_fft_library = "FFTW3"
+	extended_fft_lengths = ".True."
 	print_level = "MEDIUM"
 	run_type = "CELL_OPT" # "GEO_OPT" # "ENERGY_FORCE"
 
@@ -40,12 +40,12 @@ class Global:
 		print("--------------------------------------------")
 		print("Global Class")
 		print("--------------------------------------------")
-		print("Name        : {}".format(self.name))
-		print("Run Type    : {}".format(self.run_type))
-		print("Print Level : {}".format(self.print_level))
-		print("FFT Library : {}".format(self.fft_library))
-		print("FFT Lengths : {}".format(self.fft_lengths))
-		print("Blacs grid  : {}".format(self.blacs_grid))
+		print("Name                   : {}".format(self.name))
+		print("Run Type               : {}".format(self.run_type))
+		print("Print Level            : {}".format(self.print_level))
+		print("Preferred FFT Library  : {}".format(self.fft_library))
+		print("Extended FFT Lengths   : {}".format(self.fft_lengths))
+		print("Blacs grid             : {}".format(self.blacs_grid))
 		print("--------------------------------------------")
 
 	def asdict(self):
@@ -53,8 +53,8 @@ class Global:
 			"RUN_TYPE" : self.run_type,
 			"PRINT_LEVEL" : self.print_level,
 			"BLACS_GRID" : self.blacs_grid,
-			"FFT_LIBRARY" : self.fft_library,
-			"FTT_LENGTHS" : self.fft_lengths,
+			"PREFERRED_FFT_LIBRARY" : self.preferred_fft_library,
+			"EXTENDED_FFT_LENGTHS" : self.extended_fft_lengths,
 			}
 
 	def write_to_file(self, input_deck):
@@ -87,7 +87,7 @@ class Cell_Opt:
 	constraint = "None" # X, XY, XZ, Y, YZ, Z 
 	external_pressure = 100 # Default 100 bar
 	keep_angles = ".True."
-	keep_symmerty = ".False."
+	keep_symmetry = ".False."
 	max_dr = 3E-3 
 	max_force = 1.00E-04	
 	max_iter = 1800
@@ -102,7 +102,7 @@ class Cell_Opt:
 		return {"CONSTRAINT" : self.constraint,
 			"EXTERNAL_PRESSURE" : self.external_pressure,
 			"KEEP_ANGLES": self.keep_angles,
-			"KEEP_SYMMERTY" : self.keep_symmerty,
+			"KEEP_SYMMETRY" : self.keep_symmetry,
 			"MAX_DR" : self.max_dr,
 			"MAX_FORCE" : self.max_force,
 			"MAX_ITER" : self.max_iter,
@@ -121,8 +121,7 @@ class Cell_Opt:
 		print("Constraint     : {}".format(self.constraint))
 		print("External Pres. : {}".format(self.external_pressure))
 		print("Keep Angles    : {}".format(self.keep_angles))
-		print("Keep Symmetry  : {}".format(self.keep_symmerty))
-		print("Start Value    : {}".format(self.step_start_val))
+		print("Keep Symmetry  : {}".format(self.keep_symmetry))
 		print("Max DR.        : {}".format(self.max_dr))
 		print("Max Iter.      : {}".format(self.max_iter))
 		print("Max Force      : {}".format(self.max_force))
@@ -130,14 +129,15 @@ class Cell_Opt:
 		print("Pressure Tol.  : {}".format(self.pressure_tol))
 		print("RMS DR         : {}".format(self.rms_dr))
 		print("RMS Force      : {}".format(self.rms_force))
+		print("Start Value    : {}".format(self.step_start_val))
 		print("Type           : {}".format(self.type))
 		print("--------------------------------------------")
 
 	def write_to_file(self, input_deck):
-		input_deck.write("\t &CELL_OPT\n")
+		input_deck.write("\t&CELL_OPT\n")
 		for key, value in self.asdict().items():
 			input_deck.write("\t \t{} {}\n".format(key,str(value).upper()))
-		input_deck.write("\t &END CELL_OPT\n")
+		input_deck.write("\t&END CELL_OPT\n")
 
 class Geo_Opt:
 
@@ -174,31 +174,35 @@ class Geo_Opt:
 		print("--------------------------------------------")
 	
 	def write_to_file(self, input_deck):
-		input_deck.write("\t &GEO_OPT\n")
+		input_deck.write("\t&GEO_OPT\n")
 		for key, value in self.asdict().items():
 			input_deck.write("\t \t{} {}\n".format(key,str(value).upper()))
-		input_deck.write("\t &END GEO_OPT\n")
+		input_deck.write("\t&END GEO_OPT\n")
 	
 class Force_Eval:
 
 	stress_tensor = "Analytical" # ANALYTICAL, DIAGONAL_ANALYTICAL, DIAGONAL NUMERICAL, NONE, NUMERICAL 
 
-	def __init__(self, method, functional, potential):
-#		self.method = method
-		self.Dft = Dft(method, functional, potential)
-#		self.Sub_Sys = Sub_Sys()
+	def __init__(self, structure, method, functional, basis_set, potential, vdw_potential):
+		self.method = method
+		self.Dft = Dft(method, functional, basis_set, potential, vdw_potential)
+		self.Sub_Sys = Sub_Sys(structure, basis_set, potential)
+	
+	def asdict(self):
+		return {"METHOD" : self.method, 
+			"STRESS_TENSOR" : self.stress_tensor,
+			}
 
 	def write_to_file(self, input_deck):
 		input_deck.write("&FORCE_EVAL\n")
+		for key, value in self.asdict().items():
+			input_deck.write("\t{} {}\n".format(key,str(value).upper()))
 		self.Dft.write_to_file(input_deck)
+		self.Sub_Sys.write_to_file(input_deck)
 		input_deck.write("&END FORCE_EVAL\n")
-
-#class Sub_Sys(self):
 
 class Dft:
 
-	basis_set_file_name = "gth_basis_sets"
-	potential_file_name = "potential"
 	charge = 0
 	excitations = "none" # NONE, TDDFPT, TDLR
 	multiplicity = 0
@@ -211,17 +215,20 @@ class Dft:
 	uks = ".False."
 	wfn_restart_file_name = ""
 
-	def __init__(self, method, functional, potential):
+	def __init__(self, method, functional, basis_set, potential, vdw_potential):
+		self.basis_set_file_name = basis_set
+		self.potential_file_name = potential
+		self.vdw_potential = vdw_potential
 		self.method = method
 		self.Scf = Scf()
-		if method == "QS":
+		if self.method == "QS":
 			self.Qs = Qs() 
 		self.Mgrid = Mgrid()
-		self.Xc = Xc(functional, potential)
+		self.Xc = Xc(functional, vdw_potential)
 
 	def asdict(self):
 		return {"BASIS_SET_FILE_NAME" : self.basis_set_file_name, 
-			"POTENIAL_SET_FILE_NAME" : self.potential_file_name,
+			"POTENTIAL_FILE_NAME" : self.potential_file_name,
 			"CHARGE" : self.charge,
 			"EXCITATIONS" : self.excitations,
 			"MULTIPLICITY" : self.multiplicity,
@@ -229,7 +236,7 @@ class Dft:
 			"RELAX_MULTIPLICITY" : self.relax_multiplicity,
 			"ROKS" : self.roks,
 			"SUBCELLS" : self.subcells,
-			"SURE_DIPOLE_CORRECTION" : self.surface_dipole_correction,
+			"SURFACE_DIPOLE_CORRECTION" : self.surface_dipole_correction,
 			"SURF_DIP_DIR" : self.surf_dip_dir,
 			"UKS" : self.uks,
 			"WFN_RESTART_FILE_NAME" : self.wfn_restart_file_name,
@@ -255,14 +262,15 @@ class Dft:
 		print("--------------------------------------------")
 	
 	def write_to_file(self, input_deck):
-		input_deck.write("\t &DFT\n")
+		input_deck.write("\t&DFT\n")
 		for key, value in self.asdict().items():
-			input_deck.write("\t \t{} {}\n".format(key,str(value).upper()))
+			input_deck.write("\t\t{} {}\n".format(key,str(value).upper()))
 		self.Scf.write_to_file(input_deck)
 		if self.method == "QS":
 			self.Qs.write_to_file(input_deck)
 		self.Mgrid.write_to_file(input_deck)
-		input_deck.write("\t &END DFT\n")
+		self.Xc.write_to_file(input_deck)
+		input_deck.write("\t&END DFT\n")
 	
 class Scf:
 
@@ -295,19 +303,21 @@ class Scf:
 		print("--------------------------------------------")
 
 	def write_to_file(self, input_deck):
-		input_deck.write("\t\t &SCF\n")
+		input_deck.write("\t\t&SCF\n")
 		for key, value in self.asdict().items():
 			input_deck.write("\t\t\t{} {}\n".format(key,str(value).upper()))
 		self.Mixing.write_to_file(input_deck)
-		input_deck.write("\t\t &END SCF\n")
+		input_deck.write("\t\t&END SCF\n")
 	
 		return
 class Mixing:
 
+	mixing = ".TRUE."
 	alpha = 2E-1 
 
 	def asdict(self):
-		return {"ALPHA" : self.alpha, 
+		return {"&MIXING" : self.mixing,
+			"ALPHA" : self.alpha, 
 			} 
 
 	def print_options(self):
@@ -318,10 +328,9 @@ class Mixing:
 		print("--------------------------------------------")
 
 	def write_to_file(self, input_deck):
-		input_deck.write("\t\t\t &MIXING\n")
 		for key, value in self.asdict().items():
-			input_deck.write("\t\t\t\t{} {}\n".format(key,str(value).upper()))
-		input_deck.write("\t\t\t &END MIXING \n")
+			input_deck.write("\t\t\t\t\t{} {}\n".format(key,str(value).upper()))
+		input_deck.write("\t\t\t\t&END MIXING \n")
 
 class Qs:
 
@@ -348,10 +357,10 @@ class Qs:
 		print("--------------------------------------------")
 
 	def write_to_file(self, input_deck):
-		input_deck.write("\t\t &QS\n")
+		input_deck.write("\t\t&QS\n")
 		for key, value in self.asdict().items():
 			input_deck.write("\t\t\t{} {}\n".format(key,str(value).upper()))
-		input_deck.write("\t\t &END QS \n")
+		input_deck.write("\t\t&END QS \n")
 
 class Mgrid:
 
@@ -372,10 +381,10 @@ class Mgrid:
 		print("--------------------------------------------")
 
 	def write_to_file(self, input_deck):
-		input_deck.write("\t\t &MGRID\n")
+		input_deck.write("\t\t&MGRID\n")
 		for key, value in self.asdict().items():
 			input_deck.write("\t\t\t{} {}\n".format(key,str(value).upper()))
-		input_deck.write("\t\t &END MGRID \n")
+		input_deck.write("\t\t&END MGRID \n")
 
 class Xc:
 
@@ -383,10 +392,15 @@ class Xc:
 	gradient_cutoff = 1E-10
 	tau_cutoff = 1E-10
 
-	def __init__(self, functional, potential):
-		self.Vdw_Potential = Vdw_Potential(potential)
-		self.Functional = Functional(functional)
+	def __init__(self, functional, vdw_potential):
+		self.Xc_Functional = Xc_Functional(functional)
+		self.Vdw_Potential = Vdw_Potential(vdw_potential, functional)
 	
+	def asdict(self):
+		return {"DENSITY_CUTOFF" : self.density_cutoff, 
+			"GRADIENT_CUTOFF" : self.gradient_cutoff,
+			"TAU_CUTOFF" : self.tau_cutoff,
+			} 
 	def print_options(self):
 		print("--------------------------------------------")
 		print("Xc Class")
@@ -397,29 +411,84 @@ class Xc:
 		print("--------------------------------------------")
 
 	def write_to_file(self, input_deck):
-		input_deck.write("\t\t &XC\n")
+		input_deck.write("\t\t&XC\n")
 		for key, value in self.asdict().items():
 			input_deck.write("\t\t\t{} {}\n".format(key,str(value).upper()))
-		input_deck.write("\t\t &END XC \n")
+		self.Xc_Functional.write_to_file(input_deck)
+		self.Vdw_Potential.write_to_file(input_deck)
+		input_deck.write("\t\t&END XC \n")
 
-	
-#	section_parameters = "no_shortcut" 
-#	functional = "PBE"
-#
-#class Pbe:
 
-class Functional:
+class Xc_Functional:
+
 
 	def __init__(self, functional):
-		func = "PBE"
+		self.functional = functional
+		self.xc_functional = "no_shortcut"
+
+		if self.functional == "pbe":
+			self.Functional = Pbe()
+
+	def asdict(self):
+		return {"&XC_FUNCTIONAL" : self.xc_functional, 
+			} 
+
+	def print_options(self):
+		print("--------------------------------------------")
+		print("Xc_Functional Class")
+		print("--------------------------------------------")
+		print("XC Functional       : {}".format(self.xc_functional))
+		print("XC Functional Arg.  : {}".format(self.functional))
+		print("--------------------------------------------")
+
+	def write_to_file(self, input_deck):
+		for key, value in self.asdict().items():
+			input_deck.write("\t\t\t\t{} {}\n".format(key,str(value).upper()))
+		self.Functional.write_to_file(input_deck)
+		input_deck.write("\t\t\t\t&END XC_FUNCTIONAL \n")
+
+class Pbe:
+	
+	section_parameters = ".True."
+	parameterization = "ORIG" # ORIG, PBESOL, REVPBE 
+	scale_c = 1E0 
+	scale_x = 1E0
+
+	def asdict(self):
+		return {"&PBE" : self.section_parameters,
+			"PARAMETRIZATION" : self.parameterization,
+			"SCALE_C" : self.scale_c,
+			"SCALE_X" : self.scale_x, 
+			} 
+
+	def print_options(self):
+		print("--------------------------------------------")
+		print("Xc_Functional Class")
+		print("--------------------------------------------")
+		print("Section Parameters  : {}".format(self.section_parameters))
+		print("Parameterization    : {}".format(self.parameterization))
+		print("Scale C             : {}".format(self.scale_c))
+		print("Scale X             : {}".format(self.scale_x))
+		print("--------------------------------------------")
+
+	def write_to_file(self, input_deck):
+		for key, value in self.asdict().items():
+			input_deck.write("\t\t\t\t\t{} {}\n".format(key,str(value).upper()))
+		input_deck.write("\t\t\t\t\t&END PBE \n")
 
 class Vdw_Potential:
 
-	def __init__(self, potential):
-		if potential == "pair_potential":
-			self.Pair_Poetential = Pair_Potential()
-		if potential == "none":
+	def __init__(self, vdw_potential, functional):
+		self.potential = vdw_potential
+		self.functional = functional
+		if self.potential == "pair_potential":
+			self.Potential = Pair_Potential(self.functional)
+		if self.potential == "none":
 			return
+
+	def asdict(self):
+		return {"POTENTIAL_TYPE" : self.potential,
+			} 
 
 	def print_options(self):
 		print("--------------------------------------------")
@@ -429,12 +498,154 @@ class Vdw_Potential:
 		print("--------------------------------------------")
 	
 	def write_to_file(self, input_deck):
-		input_deck.write("\t\t\t &VDW_POTENTIAL\n")
+		input_deck.write("\t\t\t&VDW_POTENTIAL\n")
 		for key, value in self.asdict().items():
 			input_deck.write("\t\t\t\t{} {}\n".format(key,str(value).upper()))
-		input_deck.write("\t\t\t &END VDW_POTENTIAL \n")
+		self.Potential.write_to_file(input_deck)
+		input_deck.write("\t\t\t&END VDW_POTENTIAL \n")
 	
 class Pair_Potential:
 	
-	test = 1
+	r_cutoff = 1E1 
+	type = "dftd3"
+	parameter_file_name = "dftd3.dat"
+	calculate_c9_term = ".True."
+	reference_c9_term = ".True."
+	
+	def __init__(self,functional):
+		self.reference_functional = functional
 
+	def asdict(self):
+		return {"R_CUTOFF" : self.r_cutoff,
+			"TYPE" : self.type,
+			"PARAMETER_FILE_NAME" : self.parameter_file_name,
+			"REFERENCE_FUNCTIONAL" : self.reference_functional,
+			"CALCULATE_C9_TERM" : self.calculate_c9_term,
+			"REFERENCE_C9_TERM" : self.reference_c9_term, 
+			} 
+
+	def print_options(self):
+		print("--------------------------------------------")
+		print("Pair_Potential Class")
+		print("--------------------------------------------")
+		print("R Cutoff             : {}".format(self.r_cutoff))
+		print("Type                 : {}".format(self.type))
+		print("Paramter File Name   : {}".format(self.parameter_file_name))
+		print("Reference Functional : {}".format(self.reference_functional))
+		print("Calculate C9 Term    : {}".format(self.calculate_c9_term))
+		print("Reference C9 Term    : {}".format(self.reference_c9_term))
+		print("--------------------------------------------")
+
+	def write_to_file(self, input_deck):
+		input_deck.write("\t\t\t\t&PAIR_POTENTIAL\n")
+		for key, value in self.asdict().items():
+			if key == "PARAMETER_FILE_NAME":
+				input_deck.write("\t\t\t\t\t{} {}\n".format(key,value))
+			else:
+				input_deck.write("\t\t\t\t\t{} {}\n".format(key,str(value).upper()))
+		input_deck.write("\t\t\t\t&END PAIR_POTENTIAL \n")
+
+class Sub_Sys:
+
+	def __init__(self, structure, basis_set, potential):
+		self.structure = structure
+		self.basis_set = basis_set
+		self.potentials = potential 
+		self.Cell = Cell(self.structure)
+		self.Coord = Coord(self.structure)
+		self.kinds = []
+		for atom in self.structure.composition.elements:
+			self.kinds.append(Kind(atom))
+
+	def write_to_file(self, input_deck):
+		input_deck.write("\t&SUBSYS\n")
+		self.Cell.write_to_file(input_deck)
+		self.Coord.write_to_file(input_deck)
+		for Atom in self.kinds:
+			Atom.write_to_file(input_deck)
+#		self.Kind.write_to_file(input_deck)
+		input_deck.write("\t&END SUBSYS\n")
+
+class Cell:
+	
+	periodic = "XYZ"
+	multiple_unit_cell = "1 1 1"
+	symmetry = "none"
+
+	def __init__(self, structure):
+		self.structure = structure 
+		self.abc = "{0:.6f} {1:.6f} {2:.6f}".format(self.structure.lattice.abc[0], self.structure.lattice.abc[1], self.structure.lattice.abc[2])
+		self.alpha_beta_gamma = "{0:.6f} {1:.6f} {2:.6f}".format(structure.lattice.angles[0], structure.lattice.angles[1], structure.lattice.angles[2])
+
+	def asdict(self):
+		return {"ABC" : self.abc,
+			"ALPHA_BETA_GAMMA " : self.alpha_beta_gamma,
+			"PERIODIC" : self.periodic,
+			"SYMMETRY" : self.symmetry,
+			"MULTIPLE_UNIT_CELL" : self.multiple_unit_cell,
+			} 
+
+	def print_options(self):
+		print("--------------------------------------------")
+		print("Cell Class")
+		print("--------------------------------------------")
+		print("ABC                  : {}".format(self.abc))
+		print("Alpha Beta Gamma     : {}".format(self.alpha_beta_gamma))
+		print("Periodic             : {}".format(self.periodic))
+		print("Symmetry             : {}".format(self.symmetry))
+		print("Multiple Unit Cell   : {}".format(self.multiple_unit_cell))
+		print("--------------------------------------------")
+
+	def write_to_file(self, input_deck):
+		input_deck.write("\t\t\t&CELL\n")
+		for key, value in self.asdict().items():
+			input_deck.write("\t\t\t\t{} {}\n".format(key,str(value).upper()))
+		input_deck.write("\t\t\t&END CELL \n")
+
+
+class Coord:
+
+	def __init__(self, structure):
+		self.structure = structure
+
+	def print_options(self):
+		print("--------------------------------------------")
+		print("Coord Class")
+		print("--------------------------------------------")
+		for atom in self.structure.sites:
+			print("{0:s} {1:.6f} {2:.6f} {3:.6f}".format(atom.specie, atom.coords[0], atom.coords[1], atom.coords[2]))	
+		print("--------------------------------------------")
+
+	def write_to_file(self, input_deck):
+		input_deck.write("\t\t\t&COORD\n")
+		for atom in self.structure.sites:
+			input_deck.write("\t\t\t\t {0:s} {1:.6f} {2:.6f} {3:.6f} \n".format(atom.specie, atom.coords[0], atom.coords[1], atom.coords[2]))
+		input_deck.write("\t\t\t&END COORD \n")
+
+class Kind:
+	
+	# PASS FUNCTIONAL AND POTENTIAL THROUGHT (EDIT)#
+
+	def __init__(self, element):
+		self.element = element
+		self.name = element.symbol
+		self.basis_set = "TZVP-GTH"
+		self.valence = self.valence_count()
+		self.potential = "GTH-PBE-q{}".format(self.valence)
+
+	def valence_count(self):
+		valence = 0
+		for shell in self.element.full_electronic_structure:
+			if shell[0] == self.element.row:
+				valence += shell[2]
+		return valence
+
+	def asdict(self):
+		return {"BASIS_SET" : self.basis_set,
+			"POTENTIAL" : self.potential,
+			} 
+	def write_to_file(self, input_deck):
+		input_deck.write("\t\t\t&KIND {}\n".format(self.name))
+		for key, value in self.asdict().items():
+			input_deck.write("\t\t\t\t{} {}\n".format(key,value))
+		input_deck.write("\t\t\t&END KIND \n")
