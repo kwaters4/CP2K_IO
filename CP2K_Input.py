@@ -1,5 +1,11 @@
 import CP2KGeometry as cp2kio
+import datetime
+import subprocess
 
+
+def bash_command(cmd):
+	subprocess.call(cmd, shell=True)
+	return
 
 class CP2K_Input_Deck:
 
@@ -13,6 +19,7 @@ class CP2K_Input_Deck:
 		self.Force_Eval = Force_Eval(structure, method, functional, basis_set, potential, vdw_potential)
 
 	def write_file(self):
+
 		filename = "{}.inp".format(self.name)
 		input_deck = open("{}/{}.inp".format(self.directory, self.name), "w")
 		# GLOBAL
@@ -22,8 +29,41 @@ class CP2K_Input_Deck:
 		# FORCE_EVAL
 		self.Force_Eval.write_to_file(input_deck)
 		input_deck.close()
-#		cp2kio.cp2k_structure(structure, filename)
-		return
+	
+	def shell_script(self, queue = "debug", nodes = 1, time = 60):
+
+		filename = "{}.sh".format(self.name)
+		sub_script = open("{}/{}.sh".format(self.directory, self.name), "w")
+
+		sub_script.write("#! /bin/bash \n\n")	
+		sub_script.write("#PBS -A ARLAP02333700\n")
+		sub_script.write("#PBS -q {}\n".format(queue))
+		sub_script.write("#PBS -l select={}:ncpus={}:mpiprocs={}\n".format(nodes, nodes*48, nodes*48))
+		sub_script.write("#PBS -l walltime={}\n\n".format(str(datetime.timedelta(minutes = time))))
+
+		sub_script.write("module unload compiler/intel\n")
+		sub_script.write("module load gcc\n")
+		sub_script.write("module load mpt\n")
+		sub_script.write("module load costinit\n")
+		sub_script.write("module load fftw3-mpi/gnu/sgimpt/3.3.5\n\n")
+
+		sub_script.write("INPUT={}\n".format(self.name))
+		sub_script.write("cd {}\n\n".format(self.directory))
+
+		sub_script.write('export CP2K_DATA_DIR="/app/ccm4/CP2K/cp2k_6_1/data"\n')
+		sub_script.write('CP2KLOC="/app/ccm4/CP2K/cp2k_6_1"\n')
+		sub_script.write('LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CP2KLOC/lib/Mustang-elpa-gf_mkl18_smm/popt\n')
+		sub_script.write('LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/p/app/PET/pkgs/CP2K/lib/elpa-2016.05.003/lib\n')
+		sub_script.write('CP2K="$CP2KLOC/exe/Mustang-elpa-gf_mkl18_smm"\n\n')
+		
+		sub_script.write("mpiexec_mpt -np {} $CP2K/cp2k.popt -o {}.out {}.inp > dump.txt".format(nodes*48, self.name, self.name))
+		sub_script.close()
+
+	def submit_job(self):
+		print("{}/{}.sh".format(self.directory, self.name))
+		bash_command("pwd")
+		bash_command("qsub {}/{}.sh".format(self.directory, self.name))
+		
 
 class Global:
 
