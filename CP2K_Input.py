@@ -61,7 +61,6 @@ class CP2K_Input_Deck:
 
 	def submit_job(self):
 		print("{}/{}.sh".format(self.directory, self.name))
-		bash_command("pwd")
 		bash_command("qsub {}/{}.sh".format(self.directory, self.name))
 		
 
