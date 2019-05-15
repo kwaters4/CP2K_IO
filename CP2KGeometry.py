@@ -128,7 +128,7 @@ def cp2k_structure(structure, filename):
     cp2k_xyz.write("\t&END CELL\n")
     cp2k_xyz.write("\t&COORD\n")
     for atom in structure.sites:
-        cp2k_xyz.write("\t {0:s} {1:.6f} {2:.6f} {3:.6f} \n".format(atom.specie,atom.coords[0], atom.coords[1], atom.coords[2]))
+        cp2k_xyz.write("\t {0:s} {1:.6f} {2:.6f} {3:.6f} \n".format(atom.specie, atom.coords[0], atom.coords[1], atom.coords[2]))
     cp2k_xyz.write("\t&END COORD\n")
 
 #xyz_path ="./Si_bulk8-pos-1.xyz"

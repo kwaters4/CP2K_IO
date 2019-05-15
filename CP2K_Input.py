@@ -225,6 +225,7 @@ class Force_Eval:
         self.method = method
         self.Dft = Dft(method, functional, basis_set, potential, vdw_potential)
         self.Sub_Sys = Sub_Sys(structure, basis_set, potential, functional)
+        self.Print = Print("stress_tensor")
     
     def asdict(self):
         return {"METHOD" : self.method, 
@@ -237,6 +238,7 @@ class Force_Eval:
             input_deck.write("\t{} {}\n".format(key,str(value).upper()))
         self.Dft.write_to_file(input_deck)
         self.Sub_Sys.write_to_file(input_deck)
+        self.Print.write_to_file(input_deck)
         input_deck.write("&END FORCE_EVAL\n")
 
 class Dft:
@@ -264,7 +266,7 @@ class Dft:
         if self.functional == "pbe": 
             self.vdw_potential = vdw_potential
             self.Xc = Xc(functional, vdw_potential)
-        if self.functional == "DFTB":
+        if self.functional == "dftb":
             self.Poisson = Poisson()
         self.Mgrid = Mgrid()
     
@@ -313,7 +315,7 @@ class Dft:
         self.Mgrid.write_to_file(input_deck)
         if self.functional == "pbe": 
             self.Xc.write_to_file(input_deck)
-        if self.functional == "DFTB": 
+        if self.functional == "dftb": 
             self.Poisson.write_to_file(input_deck)
         input_deck.write("\t&END DFT\n")
 
@@ -382,11 +384,12 @@ class Qs:
     map_consistent= ".True."
     extrapolation = "ps"
     extrapolation_order = 3
+    method = "gpw"
 
     def __init__(self, functional):
         self.functional = functional
-        if self.functional == "DFTB":
-            self.method = self.functional
+        if self.functional == "dftb":
+            self.method = "dftb"
             self.Dftb = Dftb()
     
     def asdict(self):
@@ -394,7 +397,7 @@ class Qs:
             "EXTRAPOLATION" : self.extrapolation,
             "EXTRAPOLATION_ORDER" : self.extrapolation_order,
             "MAP_CONSISTENT" : self.map_consistent,
-            "METHOD" : self.functional 
+            "METHOD" : self.method 
             } 
     
     def print_options(self):
@@ -412,7 +415,7 @@ class Qs:
         input_deck.write("\t\t&QS\n")
         for key, value in self.asdict().items():
             input_deck.write("\t\t\t{} {}\n".format(key,str(value).upper()))
-        if self.functional == "DFTB":
+        if self.functional == "dftb":
             self.Dftb.write_to_file(input_deck)
         input_deck.write("\t\t&END QS \n")
 
@@ -831,3 +834,71 @@ class Kind:
         for key, value in self.asdict().items():
             input_deck.write("\t\t\t\t{} {}\n".format(key,value))
         input_deck.write("\t\t\t&END KIND \n")
+
+class Print:
+
+    def __init__(self, print_type):
+        self.print_type = print_type
+        if self.print_type == "stress_tensor":
+            self.Stress_Tensor = Stress_Tensor()
+
+    def write_to_file(self, input_deck):
+        input_deck.write("\t\t\t&PRINT\n")
+        if self.print_type == "stress_tensor":
+            self.Stress_Tensor.write_to_file(input_deck)
+        input_deck.write("\t\t\t&END PRINT \n")
+
+class Stress_Tensor:
+
+    add_last = "NUMERIC"
+    common_iteration_levels = 1
+    filename = "./stress_tensor"
+    log_print_key = ".False."
+
+    def __init__(self):
+        self.Each = Each()
+
+    def asdict(self):
+        return {"ADD_LAST" : self.add_last,
+            "COMMON_ITERATION_LEVELS" : self.common_iteration_levels,
+            "FILENAME" : self.filename,
+            "LOG_PRINT_KEY" : self.log_print_key
+             } 
+
+    def print_options(self):
+        print("--------------------------------------------")
+        print("Stress Tensor Class")
+        print("--------------------------------------------")
+        print("Add Last                   : {}".format(self.add_last))
+        print("Common Iteration Levels    : {}".format(self.common_iterations_levels))
+        print("File Name                  : {}".format(self.filename))
+        print("Log Print Key              : {}".format(self.log_print_key))
+        print("--------------------------------------------")
+
+    def write_to_file(self, input_deck):
+        input_deck.write("\t\t\t\t&STRESS_TENSOR\n")
+        for key, value in self.asdict().items():
+            input_deck.write("\t\t\t\t\t{} {}\n".format(key,value))
+        self.Each.write_to_file(input_deck)
+        input_deck.write("\t\t\t\t&END STRESS_TENSOR \n")
+
+class Each:
+
+    geo_opt = 50
+    
+    def asdict(self):
+        return {"GEO_OPT" : self.geo_opt,
+            }
+    
+    def print_options(self):
+        print("--------------------------------------------")
+        print("Each Class")
+        print("--------------------------------------------")
+        print("Geo Opt          : {}".format(self.geo_opt))
+        print("--------------------------------------------")
+
+    def write_to_file(self, input_deck):
+        input_deck.write("\t\t\t\t\t&EACH\n")
+        for key, value in self.asdict().items():
+            input_deck.write("\t\t\t\t\t\t{} {}\n".format(key,value))
+        input_deck.write("\t\t\t\t\t&END EACH \n")
