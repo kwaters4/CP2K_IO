@@ -2,6 +2,8 @@ import CP2KGeometry as cp2kio
 import datetime
 import subprocess
 
+def round_odd(f):
+    return np.ceil(f) // 2 * 2 + 1
 
 def bash_command(cmd):
     subprocess.call(cmd, shell=True)
@@ -493,7 +495,7 @@ class Poisson:
 class Ewald:
 
     ewald_type = "SPME"
-    gmax = "15 15 15"
+    gmax = [round_odd(self.abc[0]),round_odd(self.abc[1]),round_odd(self.abc[2])] 
     o_spline = 5
     
     def asdict(self):
@@ -513,7 +515,10 @@ class Ewald:
 
     def write_to_file(self, input_deck):
         input_deck.write("\t\t\t&EWALD\n")
+
         for key, value in self.asdict().items():
+            if key == "GMAX":
+                input_deck.write("\t\t\t\t\t{} {} {} {}\n".format(key,str(value[0]), str(value[1]), str(value[2])))
             input_deck.write("\t\t\t\t{} {}\n".format(key,str(value).upper()))
         input_deck.write("\t\t\t&END EWALD \n")
 
@@ -523,11 +528,18 @@ class Parameter:
     param_file_path = "/app/ccm4/CP2K/cp2k_6_1/data/DFTB/scc"
     param_file_name = "scc_parameter"
     uff_force_field = "uff_table"
-    
+#    d3_scaling = [1.00, 1.217, 0.7220]
+    d3_scaling = [1.00, 1.215, 0.00]
+    dispersion_type = "d3"
+    dispersion_parameter_file = "dftd3.dat" 
+
     def asdict(self):
         return {"PARAM_FILE_PATH" : self.param_file_path, 
             "PARAM_FILE_NAME" : self.param_file_name,
-            "UFF_FORCE_FIELD" : self.uff_force_field
+            "UFF_FORCE_FIELD" : self.uff_force_field,
+            "D3_SCALING" : self.d3_scaling,
+            "DISPERSION_TYPE" : self.dispersion_type,
+            "DISPERSION_PARAMETER_FILE" : self.dispersion_parameter_file
             } 
 
     def print_options(self):
@@ -537,30 +549,36 @@ class Parameter:
         print("Parameter file path   : {}".format(self.param_file_path))
         print("Parameter file name   : {}".format(self.param_file_name))
         print("UFF force field       : {}".format(self.uff_force_field))
+        print("D3 Scaling            : {}".format(self.d3_scaling))
+        print("Dispersion Type       : {}".format(self.dispersion_type))
+        print("Dispersion File       : {}".format(self.dispersion_parameter_file))
         print("--------------------------------------------")
 
     def write_to_file(self, input_deck):
         input_deck.write("\t\t\t\t&PARAMETER\n")
         for key, value in self.asdict().items():
-            input_deck.write("\t\t\t\t\t{} {}\n".format(key,str(value)))
-        input_deck.write("\t\t\t\t&END PARAMETER \n")
+            if key == "D3_SCALING":
+                input_deck.write("\t\t\t\t\t{} {} {} {}\n".format(key,str(value[0]), str(value[1]), str(value[2])))
+            else:
+                input_deck.write("\t\t\t\t\t{} {}\n".format(key,str(value)))
+        input_deck.write("\t\t\t\t&end parameter \n")
 
 class Mgrid:
 
     ngrids = 4
-    cutoff = 5E2 
+    cutoff = 5e2 
     
     def asdict(self):
-        return {"NGRIDS" : self.ngrids, 
-            "CUTOFF" : self.cutoff,
+        return {"ngrids" : self.ngrids, 
+            "cutoff" : self.cutoff,
             } 
     
     def print_options(self):
         print("--------------------------------------------")
-        print("Mgrid Class")
+        print("mgrid class")
         print("--------------------------------------------")
-        print("NGrids           : {}".format(self.ngrids))
-        print("Cutoff           : {}".format(self.cutoff))
+        print("ngrids           : {}".format(self.ngrids))
+        print("cutoff           : {}".format(self.cutoff))
         print("--------------------------------------------")
     
     def write_to_file(self, input_deck):
