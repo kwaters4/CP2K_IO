@@ -1,6 +1,7 @@
 import CP2KGeometry as cp2kio
 import datetime
 import subprocess
+import numpy as np
 
 def round_odd(f):
     return np.ceil(f) // 2 * 2 + 1
@@ -11,14 +12,14 @@ def bash_command(cmd):
 
 class CP2K_Input_Deck:
 
-    def __init__(self, structure, directory, name = "default", method = "QS", functional = "pbe", basis_set = "gth_basis_sets", potential = "potential", vdw_potential = "pair_potential"):
+    def __init__(self, structure, directory, name = "default", method = "QS", functional = "pbe", basis_set = "gth_basis_sets", potential = "potential", vdw_potential = "pair_potential", homo_lumo = False):
 
         self.name = name
         self.directory = directory
         self.structure = structure
         self.Global = Global(name)
         self.Motion = Motion(self.Global.run_type)
-        self.Force_Eval = Force_Eval(structure, method, functional, basis_set, potential, vdw_potential)
+        self.Force_Eval = Force_Eval(structure, method, functional, basis_set, potential, vdw_potential, homo_lumo)
 
     def write_file(self):
 
@@ -223,9 +224,9 @@ class Force_Eval:
 
     stress_tensor = "Analytical" # ANALYTICAL, DIAGONAL_ANALYTICAL, DIAGONAL NUMERICAL, NONE, NUMERICAL 
     
-    def __init__(self, structure, method, functional, basis_set, potential, vdw_potential):
+    def __init__(self, structure, method, functional, basis_set, potential, vdw_potential, homo_lumo):
         self.method = method
-        self.Dft = Dft(method, functional, basis_set, potential, vdw_potential)
+        self.Dft = Dft(method, functional, basis_set, potential, vdw_potential, structure.lattice.abc, homo_lumo)
         self.Sub_Sys = Sub_Sys(structure, basis_set, potential, functional)
         self.Print = Print("stress_tensor")
     
@@ -257,10 +258,11 @@ class Dft:
     uks = ".False."
     wfn_restart_file_name = ""
     
-    def __init__(self, method, functional, basis_set, potential, vdw_potential):
+    def __init__(self, method, functional, basis_set, potential, vdw_potential, abc, homo_lumo):
         self.method = method
         self.functional = functional
         self.Scf = Scf()
+        self.homo_lumo = homo_lumo
         if self.method == "QS":
             self.Qs = Qs(functional) 
         self.basis_set_file_name = basis_set
@@ -269,7 +271,9 @@ class Dft:
             self.vdw_potential = vdw_potential
             self.Xc = Xc(functional, vdw_potential)
         if self.functional == "dftb":
-            self.Poisson = Poisson()
+            self.Poisson = Poisson(abc)
+        if self.homo_lumo == True:
+            self.Print = Print("homo_lumo")
         self.Mgrid = Mgrid()
     
     def asdict(self):
@@ -305,6 +309,7 @@ class Dft:
         print("Surface Dipole Dir.  : {}".format(self.surf_dip_dir))
         print("Spin Polarized KS    : {}".format(self.uks))
         print("WFN Restart File     : {}".format(self.wfn_restart_file_name))
+        print("Print HOMO-LUMO      : {}".format(self.homo_lumo))
         print("--------------------------------------------")
     
     def write_to_file(self, input_deck):
@@ -319,6 +324,8 @@ class Dft:
             self.Xc.write_to_file(input_deck)
         if self.functional == "dftb": 
             self.Poisson.write_to_file(input_deck)
+        if self.homo_lumo == True:
+            self.Print.write_to_file(input_deck)
         input_deck.write("\t&END DFT\n")
 
 class Scf:
@@ -466,9 +473,8 @@ class Dftb:
 
 class Poisson:
 
-    def __init__(self):
-        self.Ewald = Ewald()
-
+    def __init__(self, abc):
+        self.Ewald = Ewald(abc)
     periodic = "XYZ"
     poisson_solver = "PERIODIC"
 
@@ -494,9 +500,10 @@ class Poisson:
     
 class Ewald:
 
-    ewald_type = "SPME"
-    gmax = [round_odd(self.abc[0]),round_odd(self.abc[1]),round_odd(self.abc[2])] 
-    o_spline = 5
+    def __init__(self, abc):
+        self.ewald_type = "SPME"
+        self.gmax = [round_odd(abc[0]),round_odd(abc[1]),round_odd(abc[2])] 
+        self.o_spline = 5
     
     def asdict(self):
         return{"EWALD_TYPE" : self.ewald_type,
@@ -518,8 +525,9 @@ class Ewald:
 
         for key, value in self.asdict().items():
             if key == "GMAX":
-                input_deck.write("\t\t\t\t\t{} {} {} {}\n".format(key,str(value[0]), str(value[1]), str(value[2])))
-            input_deck.write("\t\t\t\t{} {}\n".format(key,str(value).upper()))
+                input_deck.write("\t\t\t\t\t{} {} {} {}\n".format(key, int(value[0]), int(value[1]), int(value[2])))
+            else:
+                input_deck.write("\t\t\t\t{} {}\n".format(key,str(value).upper()))
         input_deck.write("\t\t\t&END EWALD \n")
 
 class Parameter:
@@ -765,7 +773,7 @@ class Sub_Sys:
         self.Coord.write_to_file(input_deck)
         for Atom in self.kinds:
             Atom.write_to_file(input_deck)
-#		self.Kind.write_to_file(input_deck)
+#       self.Kind.write_to_file(input_deck)
         input_deck.write("\t&END SUBSYS\n")
 
 class Cell:
@@ -831,7 +839,7 @@ class Kind:
     def __init__(self, element):
         self.element = element
         self.name = element.symbol
-        self.basis_set = "TZVP-GTH"
+        self.basis_set = "DZVP-GTH" #TZVP-GTH
         self.valence = self.valence_count()
         self.potential = "GTH-PBE-q{}".format(self.valence)
     
@@ -859,12 +867,69 @@ class Print:
         self.print_type = print_type
         if self.print_type == "stress_tensor":
             self.Stress_Tensor = Stress_Tensor()
+        if self.print_type =="homo_lumo":
+            self.Mo = Mo()
+            self.Mo_cubes = Mo_cubes()
 
     def write_to_file(self, input_deck):
         input_deck.write("\t\t\t&PRINT\n")
         if self.print_type == "stress_tensor":
             self.Stress_Tensor.write_to_file(input_deck)
+        if self.print_type =="homo_lumo":
+            self.Mo.write_to_file(input_deck)
+            self.Mo_cubes.write_to_file(input_deck)
         input_deck.write("\t\t\t&END PRINT \n")
+
+class Mo:
+
+    occnums = True
+    eigenvalues = True
+
+    def asdict(self):
+        return {"OCCNUMS" : self.occnums,
+            "EIGENVALUES" : self.eigenvalues,
+             } 
+
+    def print_options(self):
+        print("--------------------------------------------")
+        print("Stress Tensor Class")
+        print("--------------------------------------------")
+        print("Occnums                   : {}".format(self.occnums))
+        print("Eigenvalues               : {}".format(self.eigenvalues))
+        print("--------------------------------------------")
+
+    def write_to_file(self, input_deck):
+        input_deck.write("\t\t\t\t&MO\n")
+        for key, value in self.asdict().items():
+            input_deck.write("\t\t\t\t\t{} {}\n".format(key,value))
+        input_deck.write("\t\t\t\t&END MO \n")
+
+class Mo_cubes:
+
+    n_lumo = 4
+    n_homo = 4
+    write_cube = False
+    
+    def asdict(self):
+        return {"NLUMO" : self.n_lumo,
+            "NHOMO" : self.n_homo,
+            "WRITE_CUBE" : self.write_cube,
+             } 
+
+    def print_options(self):
+        print("--------------------------------------------")
+        print("Stress Tensor Class")
+        print("--------------------------------------------")
+        print("nlumo                   : {}".format(self.n_lumo))
+        print("nhomo                   : {}".format(self.n_homo))
+        print("write cube              : {}".format(self.write_cube))
+        print("--------------------------------------------")
+
+    def write_to_file(self, input_deck):
+        input_deck.write("\t\t\t\t&MO_CUBES\n")
+        for key, value in self.asdict().items():
+            input_deck.write("\t\t\t\t\t{} {}\n".format(key,value))
+        input_deck.write("\t\t\t\t&END MO_CUBES \n")
 
 class Stress_Tensor:
 
