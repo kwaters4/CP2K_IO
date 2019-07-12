@@ -330,7 +330,7 @@ class Dft:
 
 class Scf:
 
-    max_scf = 200
+    max_scf = 20
     max_diis = 8
     eps_scf = 1E-6 
     eps_diis = 5E-1
