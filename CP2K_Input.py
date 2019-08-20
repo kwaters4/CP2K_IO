@@ -432,6 +432,7 @@ class Dftb:
     
     diagonal_dftb3 = ".False."
     dispersion = ".True."
+    dispersion = ".False."
     do_ewald = ".True."
     eps_disp = 1E-4
     hb_sr_gamma = ".True."
