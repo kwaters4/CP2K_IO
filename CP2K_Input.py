@@ -12,7 +12,7 @@ def bash_command(cmd):
 
 class CP2K_Input_Deck:
 
-    def __init__(self, structure, directory, name = "default", method = "QS", functional = "pbe", basis_set = "gth_basis_sets", potential = "potential", vdw_potential = "pair_potential", homo_lumo = False):
+    def __init__(self, structure, directory, name = "default", method = "QS", functional = "pbe", basis_set = "gth_basis_sets", potential = "potential", vdw_potential = "pair_potential", homo_lumo = False, machine = "onyx"):
 
         self.name = name
         self.directory = directory
@@ -33,7 +33,7 @@ class CP2K_Input_Deck:
         self.Force_Eval.write_to_file(input_deck)
         input_deck.close()
 
-    def shell_script(self, queue = "debug", nodes = 1, time = 60):
+    def shell_script(self, queue = "debug", nodes = 1, time = 60, machine = "onyx"):
 
         filename = "{}.sh".format(self.name)
         sub_script = open("{}/{}.sh".format(self.directory, self.name), "w")
@@ -41,25 +41,35 @@ class CP2K_Input_Deck:
         sub_script.write("#! /bin/bash \n\n")	
         sub_script.write("#PBS -A ARLAP02333700\n")
         sub_script.write("#PBS -q {}\n".format(queue))
-        sub_script.write("#PBS -l select={}:ncpus={}:mpiprocs={}\n".format(nodes, 48, 48))
+        if machine == "onyx":
+            sub_script.write("#PBS -l select={}:ncpus={}:mpiprocs={}\n".format(nodes, 44, 44))
+        if machine == "mustang":
+            sub_script.write("#PBS -l select={}:ncpus={}:mpiprocs={}\n".format(nodes, 48, 48))
         sub_script.write("#PBS -l walltime={}\n\n".format(str(datetime.timedelta(minutes = time))))
         
-        sub_script.write("module unload compiler/intel\n")
-        sub_script.write("module load gcc\n")
-        sub_script.write("module load mpt\n")
-        sub_script.write("module load costinit\n")
-        sub_script.write("module load fftw3-mpi/gnu/sgimpt/3.3.5\n\n")
+        if machine == "mustang":
+            sub_script.write("module unload compiler/intel\n")
+            sub_script.write("module load gcc\n")
+            sub_script.write("module load mpt\n")
+            sub_script.write("module load costinit\n")
+            sub_script.write("module load fftw3-mpi/gnu/sgimpt/3.3.5\n\n")
         
         sub_script.write("INPUT={}\n".format(self.name))
         sub_script.write("cd {}\n\n".format(self.directory))
+
+        if machine == "onyx":
+            sub_script.write("CP2K='/p/app/unsupported/petccm/CP2K/cp2k_5_1/cp2k/exe/Onyx-gf-sci-smm-elpa-xsm-int-xc'\n\n")
+
+            sub_script.write("aprun -n {} $CP2K/cp2k.popt -o {}.out {}.inp > dump.txt".format(nodes*44, self.name, self.name))
         
-        sub_script.write('export CP2K_DATA_DIR="/app/ccm4/CP2K/cp2k_6_1/data"\n')
-        sub_script.write('CP2KLOC="/app/ccm4/CP2K/cp2k_6_1"\n')
-        sub_script.write('LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CP2KLOC/lib/Mustang-elpa-gf_mkl18_smm/popt\n')
-        sub_script.write('LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/p/app/PET/pkgs/CP2K/lib/elpa-2016.05.003/lib\n')
-        sub_script.write('CP2K="$CP2KLOC/exe/Mustang-elpa-gf_mkl18_smm"\n\n')
-        
-        sub_script.write("mpiexec_mpt -np {} $CP2K/cp2k.popt -o {}.out {}.inp > dump.txt".format(nodes*48, self.name, self.name))
+        if machine == "mustang":
+            sub_script.write('export CP2K_DATA_DIR="/app/ccm4/CP2K/cp2k_6_1/data"\n')
+            sub_script.write('CP2KLOC="/app/ccm4/CP2K/cp2k_6_1"\n')
+            sub_script.write('LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CP2KLOC/lib/Mustang-elpa-gf_mkl18_smm/popt\n')
+            sub_script.write('LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/p/app/PET/pkgs/CP2K/lib/elpa-2016.05.003/lib\n')
+            sub_script.write('CP2K="$CP2KLOC/exe/Mustang-elpa-gf_mkl18_smm"\n\n')
+            
+            sub_script.write("mpiexec_mpt -np {} $CP2K/cp2k.popt -o {}.out {}.inp > dump.txt".format(nodes*48, self.name, self.name))
         sub_script.close()
 
     def submit_job(self):
@@ -258,13 +268,13 @@ class Dft:
     uks = ".False."
     wfn_restart_file_name = ""
     
-    def __init__(self, method, functional, basis_set, potential, vdw_potential, abc, homo_lumo):
+    def __init__(self, method, functional, basis_set, potential, vdw_potential, abc, homo_lumo, machine = "onyx"):
         self.method = method
         self.functional = functional
         self.Scf = Scf()
         self.homo_lumo = homo_lumo
         if self.method == "QS":
-            self.Qs = Qs(functional) 
+            self.Qs = Qs(functional, machine) 
         self.basis_set_file_name = basis_set
         self.potential_file_name = potential
         if self.functional == "pbe": 
@@ -368,18 +378,18 @@ class Scf:
 class Mixing:
 
     mixing = ".TRUE."
-    alpha = 2E-1 
+#    alpha = 2E-1 
 
     def asdict(self):
         return {"&MIXING" : self.mixing,
-            "ALPHA" : self.alpha, 
+ #           "ALPHA" : self.alpha, 
             } 
 
     def print_options(self):
         print("--------------------------------------------")
         print("Mixing Class")
         print("--------------------------------------------")
-        print("Alpha                : {}".format(self.alpha))
+  #      print("Alpha                : {}".format(self.alpha))
         print("--------------------------------------------")
     
     def write_to_file(self, input_deck):
@@ -395,11 +405,11 @@ class Qs:
     extrapolation_order = 3
     method = "gpw"
 
-    def __init__(self, functional):
+    def __init__(self, functional, machine):
         self.functional = functional
         if self.functional == "dftb":
             self.method = "dftb"
-            self.Dftb = Dftb()
+            self.Dftb = Dftb(machine)
     
     def asdict(self):
         return {"EPS_DEFAULT" : self.eps_default, 
@@ -439,8 +449,8 @@ class Dftb:
     orthogonal_basis = ".False."
     self_consistent = ".True."    
 
-    def __init__(self):
-        self.Parameter = Parameter()
+    def __init__(self, machine):
+        self.Parameter = Parameter(machine)
 
     def asdict(self):
         return {"DIAGONAL_DFTB3" : self.diagonal_dftb3, 
@@ -534,7 +544,13 @@ class Ewald:
 class Parameter:
 
 
-    param_file_path = "/app/ccm4/CP2K/cp2k_6_1/data/DFTB/scc"
+    def __init__(self, machine):
+
+        if machine == "mustang":
+            self.param_file_path = "/app/ccm4/CP2K/cp2k_6_1/data/DFTB/scc"
+        if machine == "onyx":
+            self.param_file_path = "/p/app/unsupported/petccm/CP2K/cp2k_5_1/cp2k/data/DFTB/scc"
+
     param_file_name = "scc_parameter"
     uff_force_field = "uff_table"
 #    d3_scaling = [1.00, 1.217, 0.7220]
@@ -667,9 +683,9 @@ class Pbe:
     
     def asdict(self):
         return {"&PBE" : self.section_parameters,
-            "PARAMETRIZATION" : self.parameterization,
-            "SCALE_C" : self.scale_c,
-            "SCALE_X" : self.scale_x, 
+#            "PARAMETRIZATION" : self.parameterization,
+#            "SCALE_C" : self.scale_c,
+#            "SCALE_X" : self.scale_x, 
             } 
     
     def print_options(self):
@@ -677,9 +693,9 @@ class Pbe:
         print("Xc_Functional Class")
         print("--------------------------------------------")
         print("Section Parameters  : {}".format(self.section_parameters))
-        print("Parameterization    : {}".format(self.parameterization))
-        print("Scale C             : {}".format(self.scale_c))
-        print("Scale X             : {}".format(self.scale_x))
+#        print("Parameterization    : {}".format(self.parameterization))
+#        print("Scale C             : {}".format(self.scale_c))
+#        print("Scale X             : {}".format(self.scale_x))
         print("--------------------------------------------")
     
     def write_to_file(self, input_deck):
