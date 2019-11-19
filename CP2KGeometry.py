@@ -7,11 +7,12 @@ import os
 
 class Cp2k_output:
 
-    def __init__(self, structures, energies, completed, converged):
+    def __init__(self, structures, energies, completed, converged, crashed):
         self.structures = structures
         self.energies = energies
         self.completed = completed
         self.converged = converged
+        self.crashed = crashed
 
     def final_energy(self):
         return self.energies[-1]
@@ -28,6 +29,7 @@ def parse_output(file_path):
         geo_opt = False
         cell_opt = False
         single_point = False
+        crashed = False
         for line in fp:
             if "CELL| Vector a " in line:
                 curr_line = line.split()
@@ -55,6 +57,9 @@ def parse_output(file_path):
                 cell_opt = True
             if "ENERGY_FORCE" in line:
                 single_point = True
+            if "Cholesky decompose failed" in line:
+                crashed = True
+
     if geo_opt == True:
         for i in energies:
             lattices.append(lattices[-1])
@@ -67,7 +72,7 @@ def parse_output(file_path):
     if len(lattices) > 2:
         lattices.pop(-1)
         lattices.pop(0)
-    output_list = [lattices, energies, completed, converged, single_point]
+    output_list = [lattices, energies, completed, converged, single_point, crashed]
     return output_list
 
 def geometry_parse(file_path):
@@ -101,7 +106,7 @@ def parse_structures(output_path, xyz_path, coords_are_cartesian = True):
         directory = os.path.dirname(output_path)
         filename = glob.glob('{}/*.cif'.format(directory))[0]
         structure = CifParser(filename).get_structures(primitive=False)[-1]
-        run_output = Cp2k_output(structure,output_list[1],output_list[2],output_list[3])
+        run_output = Cp2k_output(structure, output_list[1], output_list[2], output_list[3], output_list[5])
         return run_output
     else:
         species, xyz = geometry_parse(xyz_path)
@@ -112,11 +117,11 @@ def parse_structures(output_path, xyz_path, coords_are_cartesian = True):
         output_list[0].pop(0)
     if len(output_list[0]) != len(xyz) and len(output_list[0]) > 2:
         output_list[0].pop(0)
-        print(len(output_list[0]),len(xyz))
+#        print(len(output_list[0]),len(xyz))
     for i in range(0,len(output_list[0])):
         structure = Structure(output_list[0][i], species[i], xyz[i], coords_are_cartesian = coords_are_cartesian)
         structures.append(structure)
-    run_output = Cp2k_output(structures,output_list[1],output_list[2],output_list[3])
+    run_output = Cp2k_output(structures, output_list[1], output_list[2], output_list[3], output_list[5])
     return run_output
 
 def cp2k_structure(structure, filename):
