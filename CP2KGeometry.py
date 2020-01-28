@@ -43,7 +43,10 @@ def parse_output(file_path):
                 lattices.append(np.array([a1,a2,a3]))	
             if "Total energy:" in line:
                 curr_line = line.split()
-                energies.append(float(curr_line[2]))
+                try:   
+                    energies.append(float(curr_line[2]))
+                except ValueError:
+                    energies.append(np.nan)
             if "PROGRAM ENDED AT" in line:
                 completed = True
                 converged = True
